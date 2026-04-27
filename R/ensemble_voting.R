@@ -129,8 +129,8 @@ llm_subcelltype_ensemble <- function(input,
   return(final_result)
 }
 
-get_elite_subtype_predictions <- function(processed_input, tissuename, species, celltypename, elite_models, parallel, timeout_seconds) {
-  
+get_elite_predictions <- function(processed_input, tissuename, species, elite_models, parallel, timeout_seconds) {
+
   marker_data <- paste(names(processed_input), ':', processed_input, collapse = '\n')
   
   prompt <- glue::glue("Identify cell types of {species} {tissuename} cells using the following markers separately for each row.
