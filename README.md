@@ -85,7 +85,7 @@ celltype_results <- deepcellseek_celltype(
   tissuename = "PBMC", 
   species = "Human",
   model = "gemini-2.0-flash",
-  topgenenumber = "10"
+  topgenenumber = 10
 )
 
 # Cell subtype annotation  
@@ -95,7 +95,7 @@ subtype_results <- deepcellseek_subcelltype(
   celltypename = "T cell",
   species = "Human",
   model = "gpt-5",
-  topgenenumber = "10"
+  topgenenumber = 10
 )
 
 # Ensemble voting for cell types
@@ -103,7 +103,7 @@ ensemble_celltype <- deepcellseek_ensemble(
   input = markers_df,
   tissuename = "PBMC", 
   species = "Human",
-  topgenenumber = "10"
+  topgenenumber = 10
 )
 
 # Ensemble voting for subtypes
@@ -112,7 +112,7 @@ ensemble_subtype <- deepcellseek_subcelltype_ensemble(
   tissuename = "PBMC",
   celltypename = "T cell",
   species = "Human",
-  topgenenumber = "10"
+  topgenenumber = 10
 )
 ```
 
@@ -231,7 +231,7 @@ Sys.setenv(OPENAI_API_KEY = "your_openai_api_key")
 
 If you use DeepCellSeek in your research, please cite our work:
 ```
-[Paper information to be added]
+Xiao T, Hua D, Wang Y, et al. Benchmarking large language models for cell typing in single-cell RNA-Seq[J]. Briefings in Bioinformatics, 2025, 26(6): bbaf677,https://doi.org/10.1093/bib/bbaf677.
 ```
 
 ## 📝 License
@@ -243,4 +243,6 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 - **Primary Contact**: Dr. Chao Zhang (zhangchao@mail.kiz.ac.cn)
 - **Developer Contact**: Tianxiang Xiao (xiaotianxiang251@mails.ucas.ac.cn)
 - **Issues**: Please report bugs and feature requests via [GitHub Issues](https://github.com/YourUsername/DeepCellSeek/issues)
+
+
 
