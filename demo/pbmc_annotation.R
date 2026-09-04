@@ -28,8 +28,8 @@ dataset_url <- paste0(
 )
 archive_file <- file.path(input_dir, "pbmc3k_filtered_gene_bc_matrices.tar.gz")
 matrix_dir <- file.path(input_dir, "filtered_gene_bc_matrices", "hg19")
-markers_file <- file.path(input_dir, "pbmc3k_markers.rds")
-seurat_file <- file.path(input_dir, "pbmc3k_seurat.rds")
+markers_file <- file.path(input_dir, "pbmc3k_official_markers.rds")
+seurat_file <- file.path(input_dir, "pbmc3k_official_seurat.rds")
 
 # 第一次运行下载并解压；后续运行直接复用下载的数据。
 if (!dir.exists(matrix_dir)) {
@@ -45,12 +45,12 @@ if (!dir.exists(matrix_dir)) {
   stop("PBMC 3K 数据解压后未找到计数矩阵：", matrix_dir)
 }
 
-# 缓存完整 Seurat 对象，确保后续运行仍可直接绘制 UMAP。
+# 严格按 Seurat PBMC 3K 教程预处理。该教程的数据只有一个样本，不包含批次校正。
 if (file.exists(seurat_file)) {
   message("读取已缓存的 Seurat 对象：", seurat_file)
   pbmc <- readRDS(seurat_file)
 } else {
-  message("正在运行 Seurat PBMC 3K 预处理、聚类和 UMAP 流程。")
+  message("正在运行 Seurat 官方 PBMC 3K 预处理、聚类和 UMAP 流程。")
   pbmc <- Seurat::CreateSeuratObject(
     counts = Seurat::Read10X(data.dir = matrix_dir),
     project = "pbmc3k",
@@ -59,21 +59,21 @@ if (file.exists(seurat_file)) {
   )
   pbmc[["percent.mt"]] <- Seurat::PercentageFeatureSet(pbmc, pattern = "^MT-")
   pbmc <- subset(pbmc, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
-  pbmc <- Seurat::NormalizeData(pbmc, verbose = FALSE)
-  pbmc <- Seurat::FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
-  pbmc <- Seurat::ScaleData(pbmc, verbose = FALSE)
-  pbmc <- Seurat::RunPCA(pbmc, features = Seurat::VariableFeatures(pbmc), verbose = FALSE)
-  pbmc <- Seurat::FindNeighbors(pbmc, dims = 1:10, verbose = FALSE)
-  set.seed(1234)
-  pbmc <- Seurat::FindClusters(pbmc, resolution = 0.5, verbose = FALSE)
-  pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10, verbose = FALSE)
+  pbmc <- Seurat::NormalizeData(pbmc)
+  pbmc <- Seurat::FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+  all.genes <- rownames(pbmc)
+  pbmc <- Seurat::ScaleData(pbmc, features = all.genes)
+  pbmc <- Seurat::RunPCA(pbmc, features = Seurat::VariableFeatures(object = pbmc))
+  pbmc <- Seurat::FindNeighbors(pbmc, dims = 1:10)
+  pbmc <- Seurat::FindClusters(pbmc, resolution = 0.5)
+  pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10)
   saveRDS(pbmc, seurat_file)
   message("已缓存 Seurat 对象：", seurat_file)
 }
 
-# 兼容此前生成但没有 UMAP 的对象缓存。
+# 兼容不完整的官方流程缓存。
 if (!"umap" %in% names(pbmc@reductions)) {
-  pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10, verbose = FALSE)
+  pbmc <- Seurat::RunUMAP(pbmc, dims = 1:10)
   saveRDS(pbmc, seurat_file)
 }
 
@@ -126,23 +126,30 @@ print(data.frame(
   row.names = NULL
 ))
 
-# 将模型注释写入每个细胞，和 Seurat 聚类结果并排比较。
+# 先保存模型注释，再按 Seurat PBMC 3K 教程给 cluster 0-8 加参考标签。
 pbmc$LLM_Annotation <- unname(annotations[as.character(Seurat::Idents(pbmc))])
+new.cluster.ids <- c(
+  "Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T",
+  "FCGR3A+ Mono", "NK", "DC", "Platelet"
+)
+names(new.cluster.ids) <- levels(pbmc)
+pbmc <- Seurat::RenameIdents(pbmc, new.cluster.ids)
+
+# 左图为 Seurat 教程参考注释，右图为本次模型的注释。
 model_label <- if (model == "kimi-k2.6") "Kimi" else "DeepSeek"
 seurat_umap <- Seurat::DimPlot(
   pbmc,
   reduction = "umap",
-  group.by = "seurat_clusters",
   label = TRUE,
-  repel = TRUE
-) + ggplot2::ggtitle("Seurat clusters")
+  pt.size = 0.5
+) + Seurat::NoLegend() + ggplot2::ggtitle("Seurat PBMC 3K reference")
 llm_umap <- Seurat::DimPlot(
   pbmc,
   reduction = "umap",
   group.by = "LLM_Annotation",
   label = TRUE,
-  repel = TRUE
-) + ggplot2::ggtitle(paste0(model_label, " annotation (", model, ")"))
+  pt.size = 0.5
+) + Seurat::NoLegend() + ggplot2::ggtitle(paste0(model_label, " annotation (", model, ")"))
 umap_comparison <- seurat_umap + llm_umap
 output_file <- file.path(output_dir, paste0("pbmc3k_umap_", model, ".pdf"))
 ggplot2::ggsave(
