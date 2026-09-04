@@ -94,12 +94,12 @@ if (file.exists(markers_file)) {
 }
 
 # 模型选择（二选一；取消另一行的注释）：
-model <- "kimi-k2.6"                # Kimi
-Sys.setenv(KIMI_API_KEY = "你的 API Key")
+# model <- "kimi-k2.6"                # Kimi
+# Sys.setenv(KIMI_API_KEY = "你的 API Key")
 
 
-# model <- "deepseek-v4-flash"          # DeepSeek
-# Sys.setenv(DEEPSEEK_API_KEY = "你的 API Key")
+model <- "deepseek-v4-flash"          # DeepSeek
+Sys.setenv(DEEPSEEK_API_KEY = "")
 
 
 
@@ -126,20 +126,26 @@ print(data.frame(
   row.names = NULL
 ))
 
-# 先保存模型注释，再按 Seurat PBMC 3K 教程给 cluster 0-8 加参考标签。
-pbmc$LLM_Annotation <- unname(annotations[as.character(Seurat::Idents(pbmc))])
-new.cluster.ids <- c(
+# 始终使用不变的 seurat_clusters，支持在同一会话重复比较不同模型。
+cluster_ids <- as.character(pbmc$seurat_clusters)
+pbmc$LLM_Annotation <- unname(annotations[cluster_ids])
+seurat_reference <- c(
   "Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T",
   "FCGR3A+ Mono", "NK", "DC", "Platelet"
 )
-names(new.cluster.ids) <- levels(pbmc)
-pbmc <- Seurat::RenameIdents(pbmc, new.cluster.ids)
+names(seurat_reference) <- as.character(0:8)
+pbmc$Seurat_Reference <- unname(seurat_reference[cluster_ids])
+
+if (anyNA(pbmc$LLM_Annotation)) {
+  stop("模型注释未覆盖全部 Seurat cluster，无法绘制对照图。")
+}
 
 # 左图为 Seurat 教程参考注释，右图为本次模型的注释。
 model_label <- if (model == "kimi-k2.6") "Kimi" else "DeepSeek"
 seurat_umap <- Seurat::DimPlot(
   pbmc,
   reduction = "umap",
+  group.by = "Seurat_Reference",
   label = TRUE,
   pt.size = 0.5
 ) + Seurat::NoLegend() + ggplot2::ggtitle("Seurat PBMC 3K reference")
@@ -148,8 +154,13 @@ llm_umap <- Seurat::DimPlot(
   reduction = "umap",
   group.by = "LLM_Annotation",
   label = TRUE,
+  repel = TRUE,
+  label.size = 3,
   pt.size = 0.5
-) + Seurat::NoLegend() + ggplot2::ggtitle(paste0(model_label, " annotation (", model, ")"))
+) +
+  Seurat::NoLegend() +
+  ggplot2::ggtitle(paste0(model_label, " annotation (", model, ")")) +
+  ggplot2::theme(plot.margin = ggplot2::margin(12, 28, 12, 28))
 umap_comparison <- seurat_umap + llm_umap
 output_file <- file.path(output_dir, paste0("pbmc3k_umap_", model, ".pdf"))
 ggplot2::ggsave(
