@@ -1,1 +1,3 @@
 .Rproj.user
+/demo/inputs/*
+!/demo/inputs/.gitignore

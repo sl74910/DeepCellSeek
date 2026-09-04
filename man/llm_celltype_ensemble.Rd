@@ -8,12 +8,11 @@ llm_celltype_ensemble(
   input,
   tissuename,
   species = "Human",
-  elite_models = c("kimi-k2-turbo-preview", "gpt-5", "claude-opus-4-1-20250805",
-    "grok-4-0709"),
-  arbitrator_model = "kimi-k2-turbo-preview",
+  elite_models = c("deepseek-v4-flash", "deepseek-v4-pro", "kimi-k2.6"),
+  arbitrator_model = "kimi-k2.6",
   topgenenumber = 10,
   parallel = TRUE,
-  timeout_seconds = 300
+  timeout_seconds = 1000
 )
 }
 \arguments{
@@ -31,7 +30,7 @@ llm_celltype_ensemble(
 
 \item{parallel}{Whether to call models in parallel (default: TRUE)}
 
-\item{timeout_seconds}{Timeout for each API call (default: 300)}
+\item{timeout_seconds}{Timeout for each API call (default: 1000)}
 }
 \value{
 Named vector of cell type annotations

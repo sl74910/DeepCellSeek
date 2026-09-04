@@ -8,7 +8,7 @@
 #' @param api_key API key for the LLM service
 #' @return Cell type annotation results
 #' @export
-llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "deepseek-reasoner", 
+llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "deepseek-v4-flash",
                          topgenenumber = 10, api_key = NULL) {
 
   if (!requireNamespace("glue", quietly = TRUE)) {
@@ -79,7 +79,7 @@ Some can be a mixture of multiple cell types.
                           num_clusters = length(id),
                           marker_data = marker_data)
 
-      result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 300, api_key = api_key)
+      result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 1000, api_key = api_key)
 
       if (!is.null(result)) {
         res <- trimws(unlist(strsplit(result, '\n')))
@@ -134,8 +134,8 @@ Some can be a mixture of multiple cell types.
 #' @param api_key API key for the LLM service
 #' @return Cell subtype annotation results
 #' @export
-llm_subcelltype <- function(input, tissuename = NULL, species = "Human", celltypename = NULL, 
-                           model = "deepseek-reasoner", topgenenumber = 10, api_key = NULL) {
+llm_subcelltype <- function(input, tissuename = NULL, species = "Human", celltypename = NULL,
+                           model = "deepseek-v4-flash", topgenenumber = 10, api_key = NULL) {
 
   if (!requireNamespace("glue", quietly = TRUE)) {
     stop("Package 'glue' is required. Please install it with: install.packages('glue')")
@@ -207,7 +207,7 @@ Note: Some rows may represent a mixture of multiple subtypes.
                           num_clusters = length(id),
                           marker_data = marker_data)
       
-      result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 300, api_key = api_key)
+      result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 1000, api_key = api_key)
       
       if (!is.null(result)) {
         res <- trimws(unlist(strsplit(result, '\n')))

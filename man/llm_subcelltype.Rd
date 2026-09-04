@@ -9,7 +9,7 @@ llm_subcelltype(
   tissuename = NULL,
   species = "Human",
   celltypename = NULL,
-  model = "deepseek-reasoner",
+  model = "deepseek-v4-flash",
   topgenenumber = 10,
   api_key = NULL
 )

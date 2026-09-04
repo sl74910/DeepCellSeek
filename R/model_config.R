@@ -18,8 +18,8 @@ MODEL_CONFIGS <- list(
     auth_header = "Authorization", 
     auth_prefix = "Bearer",
     env_var = "DEEPSEEK_API_KEY",
-    models = c("deepseek-reasoner", "deepseek-chat"),
-    default_model = "deepseek-reasoner"
+    models = c("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"),
+    default_model = "deepseek-v4-flash"
   ),
   
   claude = list(
@@ -55,8 +55,8 @@ MODEL_CONFIGS <- list(
     auth_header = "Authorization",
     auth_prefix = "Bearer",
     env_var = "KIMI_API_KEY", 
-    models = c("moonshot-v1-128k", "kimi-k2-turbo-preview"),
-    default_model = "kimi-k2-turbo-preview"
+    models = c("kimi-k2.6", "kimi-k2.5", "moonshot-v1-128k", "kimi-k2-turbo-preview"),
+    default_model = "kimi-k2.6"
   ),
   
   doubao = list(

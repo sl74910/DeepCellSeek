@@ -4,7 +4,7 @@
 \alias{call_models_parallel}
 \title{Call multiple models in parallel}
 \usage{
-call_models_parallel(models, prompt, temperature = NULL, timeout_seconds = 300)
+call_models_parallel(models, prompt, temperature = NULL, timeout_seconds = 1000)
 }
 \arguments{
 \item{models}{Vector of model names}

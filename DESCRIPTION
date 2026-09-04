@@ -26,7 +26,7 @@ Suggests:
     dplyr,
     future,
     openai,
+    Seurat (>= 5.0.0),
     testthat (>= 3.0.0)
 URL: https://deepcellseek.kiz.ac.cn
 BugReports: https://github.com/DeepCellSeek/DeepCellSeek-R/issues 
-

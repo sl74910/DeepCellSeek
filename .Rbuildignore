@@ -11,4 +11,9 @@
 ^_R_user$
 ^\.Rhistory$
 ^\.RData$
-^\.Ruserdata$ 
+^\.Ruserdata$
+^demo/inputs($|/)
+.Rhistory
+.RData
+.Renviron
+.env

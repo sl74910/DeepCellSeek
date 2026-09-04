@@ -12,17 +12,17 @@
 #' @param arbitrator_model Model name to use for final arbitration
 #' @param topgenenumber Number of top genes to consider per cluster
 #' @param parallel Whether to call models in parallel (default: TRUE)
-#' @param timeout_seconds Timeout for each API call (default: 300)
+#' @param timeout_seconds Timeout for each API call (default: 1000)
 #' @return Named vector of cell type annotations
 #' @export
 llm_celltype_ensemble <- function(input, 
                                  tissuename, 
                                  species = "Human",
-                                 elite_models = c("kimi-k2-turbo-preview", "gpt-5", "claude-opus-4-1-20250805", "grok-4-0709"),
-                                 arbitrator_model = "kimi-k2-turbo-preview",
+                                 elite_models = c("deepseek-v4-flash", "deepseek-v4-pro", "kimi-k2.6"),
+                                 arbitrator_model = "kimi-k2.6",
                                  topgenenumber = 10,
                                  parallel = TRUE,
-                                 timeout_seconds = 300) {
+                                 timeout_seconds = 1000) {
   
   cat("🗳️ Starting ensemble voting for", species, tissuename, "cell type annotation\n")
   cat("🤖 Elite models:", paste(elite_models, collapse = ", "), "\n")
@@ -83,11 +83,11 @@ llm_subcelltype_ensemble <- function(input,
                                     tissuename,
                                     species = "Human", 
                                     celltypename,
-                                    elite_models = c("kimi-k2-turbo-preview", "gpt-5", "claude-opus-4-1-20250805", "grok-4-0709"),
-                                    arbitrator_model = "kimi-k2-turbo-preview",
+                                    elite_models = c("deepseek-v4-flash", "deepseek-v4-pro", "kimi-k2.6"),
+                                    arbitrator_model = "kimi-k2.6",
                                     topgenenumber = 10,
                                     parallel = TRUE,
-                                    timeout_seconds = 300) {
+                                    timeout_seconds = 1000) {
   
   cat("🗳️ Starting ensemble voting for", species, tissuename, celltypename, "subtype annotation\n")
 

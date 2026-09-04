@@ -8,7 +8,7 @@ llm_celltype(
   input,
   tissuename = NULL,
   species = "Human",
-  model = "deepseek-reasoner",
+  model = "deepseek-v4-flash",
   topgenenumber = 10,
   api_key = NULL
 )

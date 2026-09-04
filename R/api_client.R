@@ -33,10 +33,10 @@ get_model_provider <- function(model) {
 #' @param model Model name to use
 #' @param prompt Text prompt to send
 #' @param temperature Sampling temperature (default: 0.0)
-#' @param timeout_seconds Request timeout in seconds (default: 300)
+#' @param timeout_seconds Request timeout in seconds (default: 1000)
 #' @param api_key Optional API key (if not provided, will use environment variable)
 #' @return API response content or NULL if failed
-call_llm_api <- function(model, prompt, temperature = NULL, timeout_seconds = 300, api_key = NULL) {
+call_llm_api <- function(model, prompt, temperature = NULL, timeout_seconds = 1000, api_key = NULL) {
 
   config <- get_model_config(model)
   if (is.null(config)) {
@@ -131,22 +131,36 @@ call_openai_api <- function(config, model, prompt, temperature, timeout_seconds,
   }
 }
 
-call_deepseek_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
-  req <- httr2::request(config$endpoint) |>
-    httr2::req_headers(
+call_openai_compatible_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
+  request_body <- list(
+    model = model,
+    messages = list(list(role = "user", content = prompt))
+  )
+  if (!is.null(temperature)) {
+    request_body$temperature <- temperature
+  }
+
+  response <- httr::POST(
+    config$endpoint,
+    httr::add_headers(
       "Content-Type" = "application/json",
-      !!config$auth_header := paste(config$auth_prefix, api_key)
-    ) |>
-    httr2::req_body_json(list(
-      model = model,
-      messages = list(list(role = "user", content = prompt)),
-      temperature = temperature
-    )) |>
-    httr2::req_timeout(timeout_seconds) |>
-    httr2::req_perform()
-  
-  resp <- httr2::resp_body_json(req)
-  return(resp$choices[[1]]$message$content)
+      "Authorization" = paste(config$auth_prefix, api_key)
+    ),
+    body = jsonlite::toJSON(request_body, auto_unbox = TRUE),
+    httr::timeout(timeout_seconds),
+    encode = "raw"
+  )
+
+  if (httr::status_code(response) != 200) {
+    stop("HTTP error: ", httr::status_code(response))
+  }
+
+  resp <- jsonlite::fromJSON(httr::content(response, "text", encoding = "UTF-8"), flatten = TRUE)
+  return(resp$choices$message.content[1])
+}
+
+call_deepseek_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
+  call_openai_compatible_api(config, model, prompt, temperature, timeout_seconds, api_key)
 }
 
 call_claude_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
@@ -204,21 +218,10 @@ call_grok_api <- function(config, model, prompt, temperature, timeout_seconds, a
 }
 
 call_kimi_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
-  req <- httr2::request(config$endpoint) |>
-    httr2::req_headers(
-      "Content-Type" = "application/json",
-      !!config$auth_header := paste(config$auth_prefix, api_key)
-    ) |>
-    httr2::req_body_json(list(
-      model = model,
-      messages = list(list(role = "user", content = prompt)),
-      temperature = temperature
-    )) |>
-    httr2::req_timeout(timeout_seconds) |>
-    httr2::req_perform()
-  
-  resp <- httr2::resp_body_json(req)
-  return(resp$choices[[1]]$message$content)
+  if (model %in% c("kimi-k2.6", "kimi-k2.5")) {
+    temperature <- NULL
+  }
+  call_openai_compatible_api(config, model, prompt, temperature, timeout_seconds, api_key)
 }
 
 call_doubao_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
@@ -246,7 +249,7 @@ call_doubao_api <- function(config, model, prompt, temperature, timeout_seconds,
 #' @param temperature Sampling temperature (will be adjusted per model)
 #' @param timeout_seconds Request timeout
 #' @return Named list of results (model_name -> response)
-call_models_parallel <- function(models, prompt, temperature = NULL, timeout_seconds = 300) {
+call_models_parallel <- function(models, prompt, temperature = NULL, timeout_seconds = 1000) {
   
   if (!requireNamespace("future", quietly = TRUE)) {
     stop("Package 'future' is required for parallel processing. Please install it.")

@@ -8,7 +8,7 @@ call_llm_api(
   model,
   prompt,
   temperature = NULL,
-  timeout_seconds = 300,
+  timeout_seconds = 1000,
   api_key = NULL
 )
 }
@@ -19,7 +19,7 @@ call_llm_api(
 
 \item{temperature}{Sampling temperature (default: 0.0)}
 
-\item{timeout_seconds}{Request timeout in seconds (default: 300)}
+\item{timeout_seconds}{Request timeout in seconds (default: 1000)}
 
 \item{api_key}{Optional API key (if not provided, will use environment variable)}
 }

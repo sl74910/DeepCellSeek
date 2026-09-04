@@ -49,12 +49,8 @@ library(Seurat)
 # "seu" is the Seurat object
 markers_df <- FindAllMarkers(object = seu)
 
-# 3. Use DeepCellSeek for annotation
-# --- Activate Free Gateway Mode (No API key needed) ---
+# 3a. Annotate through the free gateway (no API key needed)
 Sys.setenv(USE_DEEPCELLSEEK_API = "TRUE")
-
-# --- Or, to use Local API Mode, set your key instead ---
-# Sys.setenv(OPENAI_API_KEY = "your_real_api_key_here")
 
 annotations <- deepcellseek_celltype(
   input = markers_df,
@@ -64,11 +60,60 @@ annotations <- deepcellseek_celltype(
 )
 
 # 4. Seamlessly integrate annotations back into Seurat object
-seu@meta.data$LLM_Annotation <- as.factor(results[as.character(Idents(seu))])
+seu$LLM_Annotation <- as.factor(annotations[as.character(Idents(seu))])
 
 # 5. Visualize the LLM-annotated cell types!
 DimPlot(seu, group.by = "LLM_Annotation", label = TRUE, repel = TRUE)
 ```
+
+For a local direct API call, set the matching key and use `llm_celltype()`
+instead. The following examples use DeepSeek or Kimi:
+
+```r
+# DeepSeek
+Sys.setenv(DEEPSEEK_API_KEY = "your_deepseek_api_key")
+annotations <- llm_celltype(
+  input = markers_df,
+  tissuename = "PBMC",
+  species = "Human",
+  model = "deepseek-v4-flash"
+)
+
+# Kimi
+# Sys.setenv(KIMI_API_KEY = "your_kimi_api_key")
+# annotations <- llm_celltype(
+#   input = markers_df,
+#   tissuename = "PBMC",
+#   species = "Human",
+#   model = "kimi-k2.6"
+# )
+```
+
+## ▶️ Runnable PBMC Demo
+
+The demo downloads the [10x Genomics PBMC 3K dataset](https://cf.10xgenomics.com/samples/cell/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz)
+used by the [Seurat PBMC 3K tutorial](https://satijalab.org/seurat/articles/pbmc3k_tutorial.html)
+to `demo/inputs/`. The raw data and generated marker cache are ignored by git.
+It then runs the Seurat workflow through `FindAllMarkers()` before annotating
+the clusters with a DeepSeek or Kimi API key:
+
+```r
+Sys.setenv(DEEPSEEK_API_KEY = "your_deepseek_api_key")
+source("demo/pbmc_annotation.R")
+```
+
+To use Kimi instead, set its key and select the model before running the demo:
+
+```r
+Sys.setenv(
+  KIMI_API_KEY = "your_kimi_api_key",
+  DEEPCELLSEEK_DEMO_MODEL = "kimi-k2.6"
+)
+source("demo/pbmc_annotation.R")
+```
+
+Run these commands from the package root. The demo prints the annotation
+returned for every Seurat cluster.
 
 ## 📚 Complete Function Reference
 
@@ -81,8 +126,8 @@ Set `Sys.setenv(USE_DEEPCELLSEEK_API = "TRUE")` to activate free gateway mode:
 ```r
 # Cell type annotation
 celltype_results <- deepcellseek_celltype(
-  input = markers_df, 
-  tissuename = "PBMC", 
+  input = markers_df,
+  tissuename = "PBMC",
   species = "Human",
   model = "gemini-2.0-flash",
   topgenenumber = 10
@@ -130,7 +175,7 @@ celltype_results <- llm_celltype(
   input = markers_df,
   tissuename = "Brain",
   species = "Human", 
-  model = "deepseek-reasoner",
+  model = "deepseek-v4-flash",
   topgenenumber = 10
 )
 
@@ -151,8 +196,8 @@ ensemble_results <- llm_celltype_ensemble(
   input = markers_df,
   tissuename = "Brain",
   species = "Human",
-  elite_models = c("kimi-k2-turbo-preview", "gpt-5", "claude-opus-4-1-20250805", "grok-4-0709"), 
-  arbitrator_model = "kimi-k2-turbo-preview"
+  elite_models = c("deepseek-v4-flash", "deepseek-v4-pro", "kimi-k2.6"),
+  arbitrator_model = "kimi-k2.6"
 )
 
 # Ensemble subtype annotation with multiple models
@@ -161,8 +206,8 @@ ensemble_results <- llm_subcelltype_ensemble(
   tissuename = "Brain",
   species = "Human",
   celltypename = "GABAergic neuron",
-  elite_models = c("kimi-k2-turbo-preview", "gpt-5", "claude-opus-4-1-20250805", "grok-4-0709"), 
-  arbitrator_model = "kimi-k2-turbo-preview"
+  elite_models = c("deepseek-v4-flash", "deepseek-v4-pro", "kimi-k2.6"),
+  arbitrator_model = "kimi-k2.6"
 )
 ```
 
@@ -218,11 +263,11 @@ Sys.setenv(OPENAI_API_KEY = "your_openai_api_key")
 
 ### 🔧 Local API Mode
 - **OpenAI**: `gpt-4o`, `gpt-5`, `gpt-4.1`
-- **DeepSeek**: `deepseek-reasoner`, `deepseek-chat`
+- **DeepSeek**: `deepseek-v4-flash`, `deepseek-v4-pro` (legacy: `deepseek-chat`, `deepseek-reasoner`)
 - **Claude**: `claude-3-7-sonnet-20250219`, `claude-sonnet-4-20250514`, `claude-opus-4-20250514`, `claude-opus-4-1-20250805`
 - **Gemini**: `gemini-2.0-flash`, `gemini-2.5-flash`
 - **Grok**: `grok-2-1212`, `grok-3`, `grok-4-0709`
-- **Kimi**: `moonshot-v1-128k`, `kimi-k2-turbo-preview`
+- **Kimi**: `kimi-k2.6` (legacy: `kimi-k2.5`, `moonshot-v1-128k`, `kimi-k2-turbo-preview`)
 - **Doubao**: `doubao-1-5-pro-256k-250115`, `doubao-seed-1-6-250615`
 
 🔮 We plan to incorporate support for additional models in future updates. Stay tuned! 👀
