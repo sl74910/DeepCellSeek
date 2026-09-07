@@ -11,6 +11,8 @@
 #' @param elite_models Vector of model names to use for initial predictions
 #' @param arbitrator_model Model name to use for final arbitration
 #' @param topgenenumber Number of top genes to consider per cluster
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param parallel Whether to call models in parallel (default: TRUE)
 #' @param timeout_seconds Timeout for each API call (default: 1000)
 #' @return Named vector of cell type annotations
@@ -22,13 +24,15 @@ llm_celltype_ensemble <- function(input,
                                  arbitrator_model = "kimi-k2.6",
                                  topgenenumber = 10,
                                  parallel = TRUE,
-                                 timeout_seconds = 1000) {
+                                 timeout_seconds = 1000,
+                                 allowed_cell_types = NULL) {
   
   cat("🗳️ Starting ensemble voting for", species, tissuename, "cell type annotation\n")
   cat("🤖 Elite models:", paste(elite_models, collapse = ", "), "\n")
   cat("⚖️ Arbitrator model:", arbitrator_model, "\n")
 
   processed_input <- process_input_data(input, topgenenumber)
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
   num_clusters <- length(processed_input)
   
   cat("📊 Processing", num_clusters, "cell clusters\n")
@@ -39,7 +43,8 @@ llm_celltype_ensemble <- function(input,
     species,
     elite_models, 
     parallel, 
-    timeout_seconds
+    timeout_seconds,
+    allowed_cell_types
   )
   
   if (length(elite_predictions) == 0) {
@@ -55,7 +60,8 @@ llm_celltype_ensemble <- function(input,
     arbitrator_model,
     num_clusters,
     timeout_seconds,
-    names(processed_input)
+    names(processed_input),
+    allowed_cell_types
   )
   
   if (is.null(final_result)) {
@@ -75,6 +81,8 @@ llm_celltype_ensemble <- function(input,
 #' @param elite_models Vector of model names for initial predictions
 #' @param arbitrator_model Model for final arbitration
 #' @param topgenenumber Number of top genes to consider
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param parallel Whether to use parallel processing
 #' @param timeout_seconds API timeout
 #' @return Named vector of cell subtype annotations
@@ -87,11 +95,13 @@ llm_subcelltype_ensemble <- function(input,
                                     arbitrator_model = "kimi-k2.6",
                                     topgenenumber = 10,
                                     parallel = TRUE,
-                                    timeout_seconds = 1000) {
+                                    timeout_seconds = 1000,
+                                    allowed_cell_types = NULL) {
   
   cat("🗳️ Starting ensemble voting for", species, tissuename, celltypename, "subtype annotation\n")
 
   processed_input <- process_input_data(input, topgenenumber)
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
   num_clusters <- length(processed_input)
 
   elite_predictions <- get_elite_subtype_predictions(
@@ -101,7 +111,8 @@ llm_subcelltype_ensemble <- function(input,
     celltypename,
     elite_models,
     parallel,
-    timeout_seconds
+    timeout_seconds,
+    allowed_cell_types
   )
   
   if (length(elite_predictions) == 0) {
@@ -118,7 +129,8 @@ llm_subcelltype_ensemble <- function(input,
     arbitrator_model,
     num_clusters,
     timeout_seconds,
-    names(processed_input)
+    names(processed_input),
+    allowed_cell_types
   )
   
   if (is.null(final_result)) {
@@ -129,20 +141,21 @@ llm_subcelltype_ensemble <- function(input,
   return(final_result)
 }
 
-get_elite_predictions <- function(processed_input, tissuename, species, elite_models, parallel, timeout_seconds) {
+get_elite_predictions <- function(processed_input, tissuename, species, elite_models, parallel,
+                                  timeout_seconds, allowed_cell_types = NULL) {
 
   marker_data <- paste(names(processed_input), ':', processed_input, collapse = '\n')
   
   prompt <- glue::glue("Identify cell types of {species} {tissuename} cells using the following markers separately for each row.
-You MUST use standardized cell type names from the Cell Ontology (CL). If no exact CL term exists, use the most specific CL term available and add descriptive modifiers.
-Only provide the cell type name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
-Some can be a mixture of multiple cell types.
+{annotation_instruction}
 
 {marker_data}",
                       species = species,
-                      tissuename = tissuename, 
+                      tissuename = tissuename,
                       num_clusters = length(processed_input),
+                      annotation_instruction = format_annotation_instruction(
+                        allowed_cell_types, length(processed_input), subtype = FALSE
+                      ),
                       marker_data = marker_data)
 
   processed_predictions <- list()
@@ -157,6 +170,7 @@ Some can be a mixture of multiple cell types.
       lines <- lines[lines != ""]
       
       if (length(lines) == length(processed_input)) {
+        lines <- restrict_to_allowed_cell_types(lines, allowed_cell_types)
         processed_predictions[[model]] <- lines
         cat("✅", model, "provided", length(lines), "predictions\n")
       } else {
@@ -170,21 +184,23 @@ Some can be a mixture of multiple cell types.
   return(processed_predictions)
 }
 
-get_elite_subtype_predictions <- function(processed_input, tissuename, species, celltypename, elite_models, parallel, timeout_seconds) {
+get_elite_subtype_predictions <- function(processed_input, tissuename, species, celltypename,
+                                          elite_models, parallel, timeout_seconds,
+                                          allowed_cell_types = NULL) {
   
   marker_data <- paste(names(processed_input), ':', processed_input, collapse = '\n')
   
   prompt <- glue::glue("Identify detailed cell subtypes for {celltypename} in {species} {tissuename} cells using the following markers, provided separately for each row.
-You MUST use standardized cell subtype names from the Cell Ontology (CL). If no exact CL term exists, use the most specific CL term available and add descriptive modifiers.
-Only output the cell subtype name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
-Note: Some rows may represent a mixture of multiple subtypes.
+{annotation_instruction}
 
 {marker_data}",
                       celltypename = celltypename,
                       species = species,
                       tissuename = tissuename,
                       num_clusters = length(processed_input),
+                      annotation_instruction = format_annotation_instruction(
+                        allowed_cell_types, length(processed_input), subtype = TRUE
+                      ),
                       marker_data = marker_data)
 
   processed_predictions <- list()
@@ -199,6 +215,7 @@ Note: Some rows may represent a mixture of multiple subtypes.
       lines <- lines[lines != ""]
       
       if (length(lines) == length(processed_input)) {
+        lines <- restrict_to_allowed_cell_types(lines, allowed_cell_types)
         processed_predictions[[model]] <- lines
         cat("✅", model, "provided", length(lines), "subtype predictions\n")
       } else {
@@ -240,21 +257,36 @@ prepare_arbitration_data <- function(elite_predictions, processed_input) {
   return(paste(prediction_lines, collapse = "\n"))
 }
 
-get_arbitrator_decision <- function(arbitration_data, tissuename, species, arbitrator_model, num_clusters, timeout_seconds, cluster_names) {
-  
+get_arbitrator_decision <- function(arbitration_data, tissuename, species, arbitrator_model,
+                                    num_clusters, timeout_seconds, cluster_names,
+                                    allowed_cell_types = NULL) {
+  ontology_arbitration_instruction <- if (is.null(allowed_cell_types)) {
+    paste(
+      "Do not consolidate predictions that have a hierarchical relationship",
+      "(e.g., parent-child classes in Cell Ontology) into a single entity.",
+      paste0(
+        "Before voting, filter out any prediction whose Cell Ontology ID is not a",
+        " descendant of the declared lineage root for ", species, " ", tissuename, " cells."
+      )
+    )
+  } else {
+    ""
+  }
+
   arbitration_prompt <- glue::glue("
 Integrate multiple AI model predictions to determine the final cell type for {species} {tissuename} cells. Predictions are provided separately for each cell type.
-Do not consolidate predictions that have a hierarchical relationship (e.g., parent-child classes in Cell Ontology) into a single entity.
-Before voting, filter out any prediction whose Cell Ontology ID is not a descendant of the declared lineage root for {species} {tissuename}.
+{ontology_arbitration_instruction}
 Determine the final annotation by majority vote. If this vote results in a tie, select the prediction from the first model listed.
-You MUST return a standardized cell type name from the Cell Ontology (CL). Consolidate synonymous predictions into a single entity before voting.
-Only output the final cell type name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
+{annotation_instruction}
 
 {arbitration_data}",
                                  species = species,
                                  tissuename = tissuename,
                                  num_clusters = num_clusters,
+                                 ontology_arbitration_instruction = ontology_arbitration_instruction,
+                                 annotation_instruction = format_annotation_instruction(
+                                   allowed_cell_types, num_clusters, subtype = FALSE
+                                 ),
                                  arbitration_data = arbitration_data)
   
   cat("⚖️ Calling arbitrator model for final decision...\n")
@@ -275,26 +307,43 @@ IMPORTANT: Return exactly {num_clusters} lines, one for each row.
 
   final_results <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result_lines)
   names(final_results) <- cluster_names
+  final_results <- restrict_to_allowed_cell_types(final_results, allowed_cell_types)
   
   return(final_results)
 }
 
-get_arbitrator_subtype_decision <- function(arbitration_data, tissuename, species, celltypename, arbitrator_model, num_clusters, timeout_seconds, cluster_names) {
-  
+get_arbitrator_subtype_decision <- function(arbitration_data, tissuename, species, celltypename,
+                                            arbitrator_model, num_clusters, timeout_seconds,
+                                            cluster_names, allowed_cell_types = NULL) {
+  ontology_arbitration_instruction <- if (is.null(allowed_cell_types)) {
+    paste(
+      "Do not consolidate predictions that have a hierarchical relationship",
+      "(e.g., parent-child classes in Cell Ontology) into a single entity.",
+      paste0(
+        "Before voting, filter out any prediction whose Cell Ontology ID is not a",
+        " descendant of the declared lineage root for ", celltypename, " in ", species,
+        " ", tissuename, " cells."
+      )
+    )
+  } else {
+    ""
+  }
+
   arbitration_prompt <- glue::glue("
 Integrate multiple AI model predictions to determine the final cell subtype for {celltypename} in {species} {tissuename} cells. Predictions are provided separately for each cell subtype.
-Do not consolidate predictions that have a hierarchical relationship (e.g., parent-child classes in Cell Ontology) into a single entity.
-Before voting, filter out any prediction whose Cell Ontology ID is not a descendant of the declared lineage root for {celltypename} in {species} {tissuename}.
+{ontology_arbitration_instruction}
 Determine the final annotation by majority vote. If this vote results in a tie, select the prediction from the first model listed.
-You MUST return a standardized cell subtype name from the Cell Ontology (CL). Consolidate synonymous predictions into a single entity before voting.
-Only output the final cell subtype name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
+{annotation_instruction}
 
 {arbitration_data}",
                                  celltypename = celltypename,
                                  species = species,
                                  tissuename = tissuename,
                                  num_clusters = num_clusters,
+                                 ontology_arbitration_instruction = ontology_arbitration_instruction,
+                                 annotation_instruction = format_annotation_instruction(
+                                   allowed_cell_types, num_clusters, subtype = TRUE
+                                 ),
                                  arbitration_data = arbitration_data)
   
   cat("⚖️ Calling arbitrator model for final subtype decision...\n")
@@ -315,6 +364,7 @@ IMPORTANT: Return exactly {num_clusters} lines, one for each row.
 
   final_results <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result_lines)
   names(final_results) <- cluster_names
+  final_results <- restrict_to_allowed_cell_types(final_results, allowed_cell_types)
   
   return(final_results)
 }

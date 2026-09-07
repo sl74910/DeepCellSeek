@@ -10,7 +10,8 @@ deepcellseek_subcelltype_ensemble(
   celltypename,
   species = "Human",
   topgenenumber = 10,
-  timeout_seconds = 300
+  timeout_seconds = 300,
+  allowed_cell_types = NULL
 )
 }
 \arguments{
@@ -25,6 +26,9 @@ deepcellseek_subcelltype_ensemble(
 \item{topgenenumber}{Number of top genes per cluster (default: 10)}
 
 \item{timeout_seconds}{Request timeout (default: 300)}
+
+\item{allowed_cell_types}{Optional character vector, data frame with a
+\code{cell_type} column, or RDS path containing the only labels the model may use}
 }
 \value{
 Named vector of cell subtype annotations from ensemble voting

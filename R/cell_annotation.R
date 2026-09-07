@@ -6,10 +6,13 @@
 #' @param model Model to use for annotation
 #' @param topgenenumber Number of top genes to consider
 #' @param api_key API key for the LLM service
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @return Cell type annotation results
 #' @export
 llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "deepseek-v4-flash",
-                         topgenenumber = 10, api_key = NULL) {
+                         topgenenumber = 10, api_key = NULL,
+                         allowed_cell_types = NULL) {
 
   if (!requireNamespace("glue", quietly = TRUE)) {
     stop("Package 'glue' is required. Please install it with: install.packages('glue')")
@@ -22,7 +25,7 @@ llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "d
 
   config <- get_model_config(model)
   if (is.null(api_key)) {
-    api_key <- Sys.getenv(config$env_var)
+    api_key <- resolve_api_key(config)
     if (api_key == "") {
       cat("📝 Note:", config$provider, "API key not found: returning the prompt itself.\n")
       API.flag <- 0
@@ -35,19 +38,19 @@ llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "d
   }
 
   processed_input <- process_input_data(input, topgenenumber)
-
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
   if (!API.flag) {
     marker_data <- paste0(names(processed_input), ':', unlist(processed_input), collapse = "\n")
     message <- glue::glue("Identify cell types of {species} {tissuename} cells using the following markers separately for each row.
-You MUST use standardized cell type names from the Cell Ontology (CL). If no exact CL term exists, use the most specific CL term available and add descriptive modifiers.
-Only provide the cell type name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
-Some can be a mixture of multiple cell types.
+{annotation_instruction}
 
 {marker_data}",
                          species = species,
                          tissuename = tissuename,
                          num_clusters = length(processed_input),
+                         annotation_instruction = format_annotation_instruction(
+                           allowed_cell_types, length(processed_input), subtype = FALSE
+                         ),
                          marker_data = marker_data)
     return(message)
   }
@@ -68,15 +71,15 @@ Some can be a mixture of multiple cell types.
       marker_data <- paste(names(processed_input)[id], ':', processed_input[id], collapse = '\n')
       
       prompt <- glue::glue("Identify cell types of {species} {tissuename} cells using the following markers separately for each row.
-You MUST use standardized cell type names from the Cell Ontology (CL). If no exact CL term exists, use the most specific CL term available and add descriptive modifiers.
-Only provide the cell type name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
-Some can be a mixture of multiple cell types.
+{annotation_instruction}
 
 {marker_data}",
                           species = species,
                           tissuename = tissuename,
                           num_clusters = length(id),
+                          annotation_instruction = format_annotation_instruction(
+                            allowed_cell_types, length(id), subtype = FALSE
+                          ),
                           marker_data = marker_data)
 
       result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 1000, api_key = api_key)
@@ -119,6 +122,7 @@ Some can be a mixture of multiple cell types.
   
   result <- gsub(',$', '', unlist(allres))
   result <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result)
+  result <- restrict_to_allowed_cell_types(result, allowed_cell_types)
   
   return(result)
 }
@@ -132,10 +136,13 @@ Some can be a mixture of multiple cell types.
 #' @param model Model to use for annotation
 #' @param topgenenumber Number of top genes to consider
 #' @param api_key API key for the LLM service
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @return Cell subtype annotation results
 #' @export
 llm_subcelltype <- function(input, tissuename = NULL, species = "Human", celltypename = NULL,
-                           model = "deepseek-v4-flash", topgenenumber = 10, api_key = NULL) {
+                           model = "deepseek-v4-flash", topgenenumber = 10, api_key = NULL,
+                           allowed_cell_types = NULL) {
 
   if (!requireNamespace("glue", quietly = TRUE)) {
     stop("Package 'glue' is required. Please install it with: install.packages('glue')")
@@ -148,7 +155,7 @@ llm_subcelltype <- function(input, tissuename = NULL, species = "Human", celltyp
 
   config <- get_model_config(model)
   if (is.null(api_key)) {
-    api_key <- Sys.getenv(config$env_var)
+    api_key <- resolve_api_key(config)
     if (api_key == "") {
       cat("📝 Note:", config$provider, "API key not found: returning the prompt itself.\n")
       API.flag <- 0
@@ -161,20 +168,20 @@ llm_subcelltype <- function(input, tissuename = NULL, species = "Human", celltyp
   }
 
   processed_input <- process_input_data(input, topgenenumber)
-  
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
   if (!API.flag) {
     marker_data <- paste0(names(processed_input), ':', unlist(processed_input), collapse = "\n")
     message <- glue::glue("Identify detailed cell subtypes for {celltypename} in {species} {tissuename} cells using the following markers, provided separately for each row.
-You MUST use standardized cell subtype names from the Cell Ontology (CL). If no exact CL term exists, use the most specific CL term available and add descriptive modifiers.
-Only output the cell subtype name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
-Note: Some rows may represent a mixture of multiple subtypes.
+{annotation_instruction}
 
 {marker_data}",
                          celltypename = celltypename,
                          species = species,
                          tissuename = tissuename,
                          num_clusters = length(processed_input),
+                         annotation_instruction = format_annotation_instruction(
+                           allowed_cell_types, length(processed_input), subtype = TRUE
+                         ),
                          marker_data = marker_data)
     return(message)
   }
@@ -195,16 +202,16 @@ Note: Some rows may represent a mixture of multiple subtypes.
       marker_data <- paste(names(processed_input)[id], ':', processed_input[id], collapse = '\n')
       
       prompt <- glue::glue("Identify detailed cell subtypes for {celltypename} in {species} {tissuename} cells using the following markers, provided separately for each row.
-You MUST use standardized cell subtype names from the Cell Ontology (CL). If no exact CL term exists, use the most specific CL term available and add descriptive modifiers.
-Only output the cell subtype name. Do not include any numbers or extra annotations before the name. Do not include any explanatory text, introductory phrases, or descriptions.
-IMPORTANT: Return exactly {num_clusters} lines, one for each row.
-Note: Some rows may represent a mixture of multiple subtypes.
+{annotation_instruction}
 
 {marker_data}",
                           celltypename = celltypename,
                           species = species,
                           tissuename = tissuename,
                           num_clusters = length(id),
+                          annotation_instruction = format_annotation_instruction(
+                            allowed_cell_types, length(id), subtype = TRUE
+                          ),
                           marker_data = marker_data)
       
       result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 1000, api_key = api_key)
@@ -247,6 +254,7 @@ Note: Some rows may represent a mixture of multiple subtypes.
   
   result <- gsub(',$', '', unlist(allres))
   result <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result)
+  result <- restrict_to_allowed_cell_types(result, allowed_cell_types)
   
   return(result)
 }

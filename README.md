@@ -76,7 +76,9 @@ annotations <- llm_celltype(
   input = markers_df,
   tissuename = "PBMC",
   species = "Human",
-  model = "deepseek-v4-flash"
+  model = "deepseek-v4-flash",
+  # Optional: restrict annotations to labels stored in an RDS character vector.
+  allowed_cell_types = "demo/inputs/PeripheralBlood_celltype.rds"
 )
 
 # Kimi
@@ -87,6 +89,44 @@ annotations <- llm_celltype(
 #   species = "Human",
 #   model = "kimi-k2.6"
 # )
+```
+
+### Restricting annotations to a known label set
+
+All annotation functions accept `allowed_cell_types = NULL` by default.
+
+When this argument is omitted, or explicitly set to `NULL`, the behavior is
+unchanged from the original package: the normal Cell Ontology prompt is used,
+and model outputs are not restricted to a user-provided label list. These two
+calls are therefore equivalent:
+
+```r
+annotations <- llm_celltype(input = markers_df, tissuename = "PBMC")
+annotations <- llm_celltype(
+  input = markers_df,
+  tissuename = "PBMC",
+  allowed_cell_types = NULL
+)
+```
+
+To enable label restriction, pass a character vector, a data frame with a
+`cell_type` column, or the path to an RDS file containing either form. Each
+selected label must match the supplied spelling. Mixed clusters are allowed
+by joining multiple listed labels with ` + ` (for example, `B cell + T cell`);
+every component must still come from the list. Any output containing a label
+outside the list is marked as failed instead of being returned as a new cell
+type.
+
+```r
+allowed_cell_types <- readRDS("demo/inputs/PeripheralBlood_celltype.rds")
+
+annotations <- llm_celltype(
+  input = markers_df,
+  tissuename = "PBMC",
+  species = "Human",
+  model = "deepseek-v4-flash",
+  allowed_cell_types = allowed_cell_types
+)
 ```
 
 ## ▶️ Runnable PBMC Demo

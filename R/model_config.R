@@ -4,6 +4,28 @@
 #' to ensure easy maintenance and extensibility.
 
 MODEL_CONFIGS <- list(
+  # OpenAI Responses-compatible relay. The base URL and key are configurable
+  # so credentials and deployment-specific endpoints stay outside the package.
+  external_openai = list(
+    base_url = "https://sub2.hongliantina.xyz",
+    # The relay configuration shown by the user uses a root base URL and the
+    # Responses wire API, whose route is /responses. A base URL ending in /v1
+    # is also handled automatically by the client.
+    endpoint_path = "/responses",
+    endpoint_path_env_var = "DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH",
+    base_url_env_var = "DEEPCELLSEEK_EXTERNAL_BASE_URL",
+    auth_header = "Authorization",
+    auth_prefix = "Bearer",
+    # Match the Codex auth.json key name, with a package-specific fallback.
+    env_var = "OPENAI_API_KEY",
+    fallback_env_var = "DEEPCELLSEEK_EXTERNAL_API_KEY",
+    requires_openai_auth = TRUE,
+    wire_api = "responses",
+    reasoning_effort = "max",
+    models = c("gpt-5.6-sol"),
+    default_model = "gpt-5.6-sol"
+  ),
+
   openai = list(
     endpoint = "https://api.openai.com/v1/chat/completions",
     auth_header = "Authorization",

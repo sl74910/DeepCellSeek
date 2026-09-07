@@ -28,6 +28,24 @@ get_model_provider <- function(model) {
   return(config$provider)
 }
 
+# Resolve a key from the configured primary and fallback environment variables.
+resolve_api_key <- function(config, api_key = NULL) {
+  if (!is.null(api_key)) {
+    return(api_key)
+  }
+
+  env_vars <- config$env_var
+  if (!is.null(config$fallback_env_var)) {
+    env_vars <- c(env_vars, config$fallback_env_var)
+  }
+  env_values <- Sys.getenv(env_vars, unset = "")
+  api_key <- env_values[which(nzchar(env_values))[1]]
+  if (is.na(api_key)) {
+    api_key <- ""
+  }
+  api_key
+}
+
 #' Make API call to LLM service
 #' 
 #' @param model Model name to use
@@ -56,9 +74,11 @@ call_llm_api <- function(model, prompt, temperature = NULL, timeout_seconds = 10
   model_type <- get_model_provider(model)
 
   if (is.null(api_key)) {
-    api_key <- Sys.getenv(config$env_var)
+    env_vars <- c(config$env_var, config$fallback_env_var)
+    env_vars <- env_vars[!is.na(env_vars) & nzchar(env_vars)]
+    api_key <- resolve_api_key(config)
     if (api_key == "") {
-      cat("❌ API key not found for", config$provider, "\n")
+      cat("❌ API key not found for", config$provider, "(checked", paste(env_vars, collapse = ", "), ")\n")
       return(NULL)
     }
   }
@@ -67,7 +87,10 @@ call_llm_api <- function(model, prompt, temperature = NULL, timeout_seconds = 10
   
   tryCatch({
     
-    if (config$provider == "openai") {
+    if (config$provider == "external_openai") {
+      result <- call_external_openai_api(config, model, prompt, effective_temperature, timeout_seconds, api_key)
+
+    } else if (config$provider == "openai") {
       result <- call_openai_api(config, model, prompt, effective_temperature, timeout_seconds, api_key)
       
     } else if (config$provider == "deepseek") {
@@ -157,6 +180,106 @@ call_openai_compatible_api <- function(config, model, prompt, temperature, timeo
 
   resp <- jsonlite::fromJSON(httr::content(response, "text", encoding = "UTF-8"), flatten = TRUE)
   return(resp$choices$message.content[1])
+}
+
+# Call an OpenAI Responses-compatible endpoint (for example, a relay service).
+# Responses reasoning models do not use chat-completions' temperature field.
+call_external_openai_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
+  base_url <- Sys.getenv(config$base_url_env_var, unset = config$base_url)
+  base_url <- sub("/+$", "", base_url)
+  endpoint_path <- Sys.getenv(
+    config$endpoint_path_env_var,
+    unset = config$endpoint_path
+  )
+  endpoint <- if (grepl("/responses$", base_url, ignore.case = TRUE)) {
+    base_url
+  } else if (grepl("/v1$", base_url, ignore.case = TRUE)) {
+    paste0(base_url, "/responses")
+  } else {
+    paste0(base_url, endpoint_path)
+  }
+
+  reasoning_effort <- Sys.getenv(
+    "DEEPCELLSEEK_REASONING_EFFORT",
+    unset = if (!is.null(config$reasoning_effort)) config$reasoning_effort else "max"
+  )
+  request_body <- list(
+    model = model,
+    input = prompt,
+    reasoning = list(effort = reasoning_effort),
+    # Streaming keeps the relay connection active while max reasoning runs,
+    # avoiding the relay's 120-second idle proxy timeout.
+    stream = TRUE
+  )
+
+  response <- httr::POST(
+    endpoint,
+    httr::add_headers(
+      "Content-Type" = "application/json",
+      "Authorization" = paste(config$auth_prefix, api_key)
+    ),
+    body = jsonlite::toJSON(request_body, auto_unbox = TRUE, null = "null"),
+    httr::timeout(timeout_seconds),
+    httr::config(connecttimeout = min(timeout_seconds, 360)),
+    encode = "raw"
+  )
+
+  status <- httr::status_code(response)
+  if (status < 200 || status >= 300) {
+    error_body <- httr::content(response, "text", encoding = "UTF-8")
+    stop("HTTP error: ", status, if (nzchar(error_body)) paste0(" - ", error_body))
+  }
+
+  response_body <- httr::content(response, "text", encoding = "UTF-8")
+  extract_stream_response_text(response_body)
+}
+
+# Parse an SSE Responses response and extract the completed response payload.
+extract_stream_response_text <- function(response_body) {
+  lines <- strsplit(response_body, "\\r?\\n", perl = TRUE)[[1]]
+  data_lines <- sub("^data:\\s*", "", lines[grepl("^data:\\s*", lines)])
+  data_lines <- data_lines[nzchar(data_lines) & data_lines != "[DONE]"]
+
+  if (!length(data_lines)) {
+    # Some relays ignore stream=TRUE and return one ordinary JSON response.
+    resp <- jsonlite::fromJSON(response_body, simplifyVector = FALSE)
+    return(extract_responses_text(resp))
+  }
+
+  for (data in rev(data_lines)) {
+    event <- tryCatch(
+      jsonlite::fromJSON(data, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+    if (!is.null(event$response)) {
+      return(extract_responses_text(event$response))
+    }
+  }
+
+  stop("Responses stream completed without output text")
+}
+
+# Responses APIs may expose output text directly or nest it in output/content.
+extract_responses_text <- function(resp) {
+  if (!is.null(resp$output_text) && length(resp$output_text) > 0) {
+    return(paste(unlist(resp$output_text), collapse = ""))
+  }
+
+  texts <- character()
+  output <- if (!is.null(resp$output)) resp$output else list()
+  for (item in output) {
+    content <- if (!is.null(item$content)) item$content else list()
+    for (part in content) {
+      if (!is.null(part$text)) {
+        texts <- c(texts, as.character(part$text))
+      }
+    }
+  }
+
+  if (!length(texts)) {
+    stop("Responses API returned no output text")
+  }
+  paste(texts, collapse = "")
 }
 
 call_deepseek_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {

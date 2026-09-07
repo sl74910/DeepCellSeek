@@ -12,7 +12,8 @@ call_deepcellseek_predict(
   model_name,
   annotation_type = 0,
   parent_cell_type = NULL,
-  timeout_seconds = 300
+  timeout_seconds = 300,
+  allowed_cell_types = NULL
 )
 }
 \arguments{
@@ -31,6 +32,9 @@ call_deepcellseek_predict(
 \item{parent_cell_type}{Parent cell type (required for subtype annotation)}
 
 \item{timeout_seconds}{Request timeout}
+
+\item{allowed_cell_types}{Optional character vector, data frame with a
+\code{cell_type} column, or RDS path containing the only labels the model may use}
 }
 \value{
 API response or NULL if failed

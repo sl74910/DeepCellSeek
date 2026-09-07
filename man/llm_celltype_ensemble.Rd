@@ -12,7 +12,8 @@ llm_celltype_ensemble(
   arbitrator_model = "kimi-k2.6",
   topgenenumber = 10,
   parallel = TRUE,
-  timeout_seconds = 1000
+  timeout_seconds = 1000,
+  allowed_cell_types = NULL
 )
 }
 \arguments{
@@ -31,6 +32,9 @@ llm_celltype_ensemble(
 \item{parallel}{Whether to call models in parallel (default: TRUE)}
 
 \item{timeout_seconds}{Timeout for each API call (default: 1000)}
+
+\item{allowed_cell_types}{Optional character vector, data frame with a
+\code{cell_type} column, or RDS path containing the only labels the model may use}
 }
 \value{
 Named vector of cell type annotations

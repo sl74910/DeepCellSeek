@@ -11,7 +11,8 @@ llm_subcelltype(
   celltypename = NULL,
   model = "deepseek-v4-flash",
   topgenenumber = 10,
-  api_key = NULL
+  api_key = NULL,
+  allowed_cell_types = NULL
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ llm_subcelltype(
 \item{topgenenumber}{Number of top genes to consider}
 
 \item{api_key}{API key for the LLM service}
+
+\item{allowed_cell_types}{Optional character vector, data frame with a
+\code{cell_type} column, or RDS path containing the only labels the model may use}
 }
 \value{
 Cell subtype annotation results

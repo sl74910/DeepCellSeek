@@ -89,10 +89,13 @@ get_deepcellseek_models <- function(timeout_seconds = 30) {
 #' @param model_name Model name (e.g., "gpt-4o", "deepseek-reasoner")
 #' @param annotation_type 0 for CellType, 1 for CellSubType
 #' @param parent_cell_type Parent cell type (required for subtype annotation)
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param timeout_seconds Request timeout
 #' @return API response or NULL if failed
-call_deepcellseek_predict <- function(clusters, species, tissueName, model_provider, model_name, 
-                                     annotation_type = 0, parent_cell_type = NULL, timeout_seconds = 300) {
+call_deepcellseek_predict <- function(clusters, species, tissueName, model_provider, model_name,
+                                     annotation_type = 0, parent_cell_type = NULL,
+                                     timeout_seconds = 300, allowed_cell_types = NULL) {
   
   endpoint <- paste0(DEEPCELLSEEK_API_CONFIG$base_url, DEEPCELLSEEK_API_CONFIG$endpoints$predict)
 
@@ -106,6 +109,11 @@ call_deepcellseek_predict <- function(clusters, species, tissueName, model_provi
       modelName = model_name
     )
   )
+
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
+  if (!is.null(allowed_cell_types)) {
+    request_body$allowedCellTypes <- allowed_cell_types
+  }
   
   if (annotation_type == 1 && !is.null(parent_cell_type)) {
     request_body$parentCellType <- parent_cell_type
@@ -163,10 +171,13 @@ call_deepcellseek_predict <- function(clusters, species, tissueName, model_provi
 #' @param annotation_type 0 for CellType, 1 for CellSubType
 #' @param parent_cell_type Parent cell type (for subtype annotation)
 #' @param chat_outputs List of ChatOutput objects from elite models
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param timeout_seconds Request timeout
 #' @return Final voting result or NULL if failed
-call_deepcellseek_voting <- function(clusters, species, tissueName, annotation_type = 0, 
-                                   parent_cell_type = NULL, chat_outputs = NULL, timeout_seconds = 300) {
+call_deepcellseek_voting <- function(clusters, species, tissueName, annotation_type = 0,
+                                   parent_cell_type = NULL, chat_outputs = NULL,
+                                   timeout_seconds = 300, allowed_cell_types = NULL) {
   
   endpoint <- paste0(DEEPCELLSEEK_API_CONFIG$base_url, DEEPCELLSEEK_API_CONFIG$endpoints$voting)
   
@@ -182,6 +193,11 @@ call_deepcellseek_voting <- function(clusters, species, tissueName, annotation_t
     tissueName = tissueName,
     chatOutputs = chat_outputs
   )
+
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
+  if (!is.null(allowed_cell_types)) {
+    request_body$allowedCellTypes <- allowed_cell_types
+  }
 
   if (annotation_type == 1 && !is.null(parent_cell_type)) {
     request_body$parentCellType <- parent_cell_type
@@ -271,12 +287,14 @@ map_model_to_deepcellseek <- function(model) {
 #' @param species Species name (default: "Human")
 #' @param model Model name
 #' @param topgenenumber Number of top genes per cluster (default: 10)
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param timeout_seconds Request timeout (default: 300)
 #' @return Named vector of cell type annotations
 #' @export
-deepcellseek_celltype <- function(input, tissuename, species = "Human", 
-                                 model = "gemini-2.0-flash", topgenenumber = 10, 
-                                 timeout_seconds = 300) {
+deepcellseek_celltype <- function(input, tissuename, species = "Human",
+                                 model = "gemini-2.0-flash", topgenenumber = 10,
+                                 timeout_seconds = 300, allowed_cell_types = NULL) {
   
   if (!use_deepcellseek_api()) {
     stop("❌ DeepCellSeek API is not enabled. Please set: Sys.setenv(USE_DEEPCELLSEEK_API = 'TRUE')")
@@ -284,6 +302,7 @@ deepcellseek_celltype <- function(input, tissuename, species = "Human",
 
   processed_input <- process_input_data(input, topgenenumber)
   formatted_clusters <- format_clusters_for_deepcellseek(processed_input)
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
   
   model_mapping <- map_model_to_deepcellseek(model)
   if (is.null(model_mapping)) {
@@ -297,6 +316,7 @@ deepcellseek_celltype <- function(input, tissuename, species = "Human",
     model_provider = model_mapping$provider,
     model_name = model_mapping$modelName,
     annotation_type = 0,
+    allowed_cell_types = allowed_cell_types,
     timeout_seconds = timeout_seconds
   )
   
@@ -309,6 +329,7 @@ deepcellseek_celltype <- function(input, tissuename, species = "Human",
   
   result <- gsub(',$', '', unlist(result))
   result <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result)
+  result <- restrict_to_allowed_cell_types(result, allowed_cell_types)
 
   if (length(result) == length(processed_input)) {
     names(result) <- names(processed_input)
@@ -325,12 +346,14 @@ deepcellseek_celltype <- function(input, tissuename, species = "Human",
 #' @param species Species name (default: "Human")
 #' @param model Model name
 #' @param topgenenumber Number of top genes per cluster (default: 10)
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param timeout_seconds Request timeout (default: 300)
 #' @return Named vector of cell subtype annotations
 #' @export
-deepcellseek_subcelltype <- function(input, tissuename, celltypename, species = "Human", 
-                                    model = "gemini-2.0-flash", topgenenumber = 10, 
-                                    timeout_seconds = 300) {
+deepcellseek_subcelltype <- function(input, tissuename, celltypename, species = "Human",
+                                    model = "gemini-2.0-flash", topgenenumber = 10,
+                                    timeout_seconds = 300, allowed_cell_types = NULL) {
   
   if (!use_deepcellseek_api()) {
     stop("❌ DeepCellSeek API is not enabled. Please set: Sys.setenv(USE_DEEPCELLSEEK_API = 'TRUE')")
@@ -338,6 +361,7 @@ deepcellseek_subcelltype <- function(input, tissuename, celltypename, species = 
 
   processed_input <- process_input_data(input, topgenenumber)
   formatted_clusters <- format_clusters_for_deepcellseek(processed_input)
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
   
   model_mapping <- map_model_to_deepcellseek(model)
   if (is.null(model_mapping)) {
@@ -352,6 +376,7 @@ deepcellseek_subcelltype <- function(input, tissuename, celltypename, species = 
     model_name = model_mapping$modelName,
     annotation_type = 1,
     parent_cell_type = celltypename,
+    allowed_cell_types = allowed_cell_types,
     timeout_seconds = timeout_seconds
   )
   
@@ -364,6 +389,7 @@ deepcellseek_subcelltype <- function(input, tissuename, celltypename, species = 
   
   result <- gsub(',$', '', unlist(result))
   result <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result)
+  result <- restrict_to_allowed_cell_types(result, allowed_cell_types)
 
   if (length(result) == length(processed_input)) {
     names(result) <- names(processed_input)
@@ -378,11 +404,14 @@ deepcellseek_subcelltype <- function(input, tissuename, celltypename, species = 
 #' @param tissuename Tissue name (e.g., "PBMC", "Brain")
 #' @param species Species name (default: "Human")
 #' @param topgenenumber Number of top genes per cluster (default: 10)
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param timeout_seconds Request timeout (default: 300)
 #' @return Named vector of cell type annotations from ensemble voting
 #' @export
-deepcellseek_ensemble <- function(input, tissuename, species = "Human", 
-                                 topgenenumber = 10, timeout_seconds = 300) {
+deepcellseek_ensemble <- function(input, tissuename, species = "Human",
+                                 topgenenumber = 10, timeout_seconds = 300,
+                                 allowed_cell_types = NULL) {
   
   if (!use_deepcellseek_api()) {
     stop("❌ DeepCellSeek API is not enabled. Please set: Sys.setenv(USE_DEEPCELLSEEK_API = 'TRUE')")
@@ -390,12 +419,14 @@ deepcellseek_ensemble <- function(input, tissuename, species = "Human",
 
   processed_input <- process_input_data(input, topgenenumber)
   formatted_clusters <- format_clusters_for_deepcellseek(processed_input)
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
 
   result <- call_deepcellseek_voting(
     clusters = formatted_clusters,
     species = species,
     tissueName = tissuename,
     annotation_type = 0,
+    allowed_cell_types = allowed_cell_types,
     timeout_seconds = timeout_seconds
   )
   
@@ -408,6 +439,7 @@ deepcellseek_ensemble <- function(input, tissuename, species = "Human",
   
   result <- gsub(',$', '', unlist(result))
   result <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result)
+  result <- restrict_to_allowed_cell_types(result, allowed_cell_types)
 
   if (length(result) == length(processed_input)) {
     names(result) <- names(processed_input)
@@ -423,11 +455,14 @@ deepcellseek_ensemble <- function(input, tissuename, species = "Human",
 #' @param celltypename Parent cell type name (e.g., "T cell", "Neuron")
 #' @param species Species name (default: "Human")
 #' @param topgenenumber Number of top genes per cluster (default: 10)
+#' @param allowed_cell_types Optional character vector, data frame with a
+#'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @param timeout_seconds Request timeout (default: 300)
 #' @return Named vector of cell subtype annotations from ensemble voting
 #' @export
 deepcellseek_subcelltype_ensemble <- function(input, tissuename, celltypename, species = "Human",
-                                               topgenenumber = 10, timeout_seconds = 300) {
+                                               topgenenumber = 10, timeout_seconds = 300,
+                                               allowed_cell_types = NULL) {
 
   if (!use_deepcellseek_api()) {
     stop("❌ DeepCellSeek API is not enabled. Please set: Sys.setenv(USE_DEEPCELLSEEK_API = 'TRUE')")
@@ -435,6 +470,7 @@ deepcellseek_subcelltype_ensemble <- function(input, tissuename, celltypename, s
 
   processed_input <- process_input_data(input, topgenenumber)
   formatted_clusters <- format_clusters_for_deepcellseek(processed_input)
+  allowed_cell_types <- resolve_allowed_cell_types(allowed_cell_types)
 
   result <- call_deepcellseek_voting(
     clusters = formatted_clusters,
@@ -442,6 +478,7 @@ deepcellseek_subcelltype_ensemble <- function(input, tissuename, celltypename, s
     tissueName = tissuename,
     annotation_type = 1, # This is the key change for subtype
     parent_cell_type = celltypename, # Pass the parent cell type
+    allowed_cell_types = allowed_cell_types,
     timeout_seconds = timeout_seconds
   )
 
@@ -454,6 +491,7 @@ deepcellseek_subcelltype_ensemble <- function(input, tissuename, celltypename, s
 
   result <- gsub(',$', '', unlist(result))
   result <- sub("^[^a-zA-Z]*([a-zA-Z].*)", "\\1", result)
+  result <- restrict_to_allowed_cell_types(result, allowed_cell_types)
 
   # Ensure the output is a named vector, consistent with other functions
   if (length(result) == length(processed_input)) {

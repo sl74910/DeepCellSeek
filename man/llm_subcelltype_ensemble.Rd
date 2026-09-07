@@ -13,7 +13,8 @@ llm_subcelltype_ensemble(
   arbitrator_model = "kimi-k2.6",
   topgenenumber = 10,
   parallel = TRUE,
-  timeout_seconds = 1000
+  timeout_seconds = 1000,
+  allowed_cell_types = NULL
 )
 }
 \arguments{
@@ -34,6 +35,9 @@ llm_subcelltype_ensemble(
 \item{parallel}{Whether to use parallel processing}
 
 \item{timeout_seconds}{API timeout}
+
+\item{allowed_cell_types}{Optional character vector, data frame with a
+\code{cell_type} column, or RDS path containing the only labels the model may use}
 }
 \value{
 Named vector of cell subtype annotations

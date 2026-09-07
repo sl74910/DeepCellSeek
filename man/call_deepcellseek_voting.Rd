@@ -11,7 +11,8 @@ call_deepcellseek_voting(
   annotation_type = 0,
   parent_cell_type = NULL,
   chat_outputs = NULL,
-  timeout_seconds = 300
+  timeout_seconds = 300,
+  allowed_cell_types = NULL
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ call_deepcellseek_voting(
 \item{chat_outputs}{List of ChatOutput objects from elite models}
 
 \item{timeout_seconds}{Request timeout}
+
+\item{allowed_cell_types}{Optional character vector, data frame with a
+\code{cell_type} column, or RDS path containing the only labels the model may use}
 }
 \value{
 Final voting result or NULL if failed

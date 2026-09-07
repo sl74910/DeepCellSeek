@@ -1,4 +1,4 @@
-# 使用 DeepSeek 或 Kimi 注释 Seurat PBMC 3K 数据。
+# 使用外部 GPT、DeepSeek 或 Kimi 注释 Seurat PBMC 3K 数据。
 #
 # 数据下载链接：
 # https://cf.10xgenomics.com/samples/cell/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz
@@ -7,7 +7,14 @@
 #
 # Kimi：Sys.setenv(KIMI_API_KEY = "你的 Kimi API Key")
 # DeepSeek：Sys.setenv(DEEPSEEK_API_KEY = "你的 DeepSeek API Key")
-# 在下方的 model 变量中选择使用 Kimi 或 DeepSeek。
+# 外部 GPT 中转站（OpenAI Responses API）：
+# 与 Codex auth.json 相同：Sys.setenv(OPENAI_API_KEY = "你的 API Key")
+# 也支持：Sys.setenv(DEEPCELLSEEK_EXTERNAL_API_KEY = "你的 API Key")
+# Sys.setenv(DEEPCELLSEEK_EXTERNAL_BASE_URL = "https://sub2.hongliantina.xyz")
+# 若中转站要求 /v1/responses，可设置：
+# Sys.setenv(DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH = "/v1/responses")
+# 可选：Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "max")
+# 在下方的 model 变量中选择使用外部 GPT、Kimi 或 DeepSeek。
 
 if (!requireNamespace("Seurat", quietly = TRUE)) {
   stop("请先安装 Seurat：install.packages('Seurat')")
@@ -30,6 +37,7 @@ archive_file <- file.path(input_dir, "pbmc3k_filtered_gene_bc_matrices.tar.gz")
 matrix_dir <- file.path(input_dir, "filtered_gene_bc_matrices", "hg19")
 markers_file <- file.path(input_dir, "pbmc3k_official_markers.rds")
 seurat_file <- file.path(input_dir, "pbmc3k_official_seurat.rds")
+allowed_cell_types_file <- file.path(input_dir, "PeripheralBlood_celltype.rds")
 
 # 第一次运行下载并解压；后续运行直接复用下载的数据。
 if (!dir.exists(matrix_dir)) {
@@ -93,23 +101,38 @@ if (file.exists(markers_file)) {
   message("已缓存 Seurat marker：", markers_file)
 }
 
+if (!file.exists(allowed_cell_types_file)) {
+  stop("未找到允许的细胞类型列表：", allowed_cell_types_file)
+}
+allowed_cell_types <- readRDS(allowed_cell_types_file)
+
 # 模型选择（二选一；取消另一行的注释）：
 # model <- "kimi-k2.6"                # Kimi
 # Sys.setenv(KIMI_API_KEY = "你的 API Key")
+#
+# model <- "deepseek-v4-flash"          # DeepSeek
+# Sys.setenv(DEEPSEEK_API_KEY = "")
+
+# 默认追加使用外部 GPT-5.6-sol，并请求最大推理强度。
+model <- "gpt-5.6-sol"
+Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "max")
+
+# 如果不使用 OPENAI_API_KEY 环境变量，可改用：
+Sys.setenv(OPENAI_API_KEY = "sk-01307247f2d210d5741659459292a3c68131413d1fcec1a0b6ee279bbe469d9a")
+Sys.setenv(DEEPCELLSEEK_EXTERNAL_BASE_URL = "https://hk1.r7z.net")
+# 若中转站要求 /v1/responses，可设置：
+# Sys.setenv(DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH = "/v1/responses")
 
 
-model <- "deepseek-v4-flash"          # DeepSeek
-Sys.setenv(DEEPSEEK_API_KEY = "")
-
-
-
-api_key_env <- switch(
+api_key_envs <- switch(
   model,
   "kimi-k2.6" = "KIMI_API_KEY",
-  "deepseek-v4-flash" = "DEEPSEEK_API_KEY"
+  "deepseek-v4-flash" = "DEEPSEEK_API_KEY",
+  "gpt-5.6-sol" = c("OPENAI_API_KEY", "DEEPCELLSEEK_EXTERNAL_API_KEY")
 )
-if (Sys.getenv(api_key_env) == "") {
-  stop("请先设置 ", api_key_env, "，再运行此 demo。")
+api_key_values <- Sys.getenv(api_key_envs, unset = "")
+if (!any(nzchar(api_key_values))) {
+  stop("请先设置以下任一变量：", paste(api_key_envs, collapse = " 或 "), "，再运行此 demo。")
 }
 
 annotations <- llm_celltype(
@@ -117,7 +140,8 @@ annotations <- llm_celltype(
   tissuename = "PBMC",
   species = "Human",
   model = model,
-  topgenenumber = 10
+  topgenenumber = 10,
+  allowed_cell_types = allowed_cell_types
 )
 
 print(data.frame(
@@ -141,7 +165,13 @@ if (anyNA(pbmc$LLM_Annotation)) {
 }
 
 # 左图为 Seurat 教程参考注释，右图为本次模型的注释。
-model_label <- if (model == "kimi-k2.6") "Kimi" else "DeepSeek"
+model_label <- switch(
+  model,
+  "kimi-k2.6" = "Kimi",
+  "deepseek-v4-flash" = "DeepSeek",
+  "gpt-5.6-sol" = "External GPT",
+  model
+)
 seurat_umap <- Seurat::DimPlot(
   pbmc,
   reduction = "umap",
