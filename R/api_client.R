@@ -46,6 +46,22 @@ resolve_api_key <- function(config, api_key = NULL) {
   api_key
 }
 
+# libcurl uses a zero timeout to mean no total request timeout. httr2 has the
+# same behaviour when no timeout option is added to a request.
+httr_timeout <- function(timeout_seconds) {
+  if (is.null(timeout_seconds)) {
+    return(httr::config(timeout = 0))
+  }
+  httr::timeout(timeout_seconds)
+}
+
+httr2_timeout <- function(req, timeout_seconds) {
+  if (is.null(timeout_seconds)) {
+    return(req)
+  }
+  httr2::req_timeout(req, timeout_seconds)
+}
+
 #' Make API call to LLM service
 #' 
 #' @param model Model name to use
@@ -125,7 +141,9 @@ call_llm_api <- function(model, prompt, temperature = NULL, timeout_seconds = 10
 }
 
 call_openai_api <- function(config, model, prompt, temperature, timeout_seconds, api_key) {
-  timeout_seconds <- if (!is.null(config$api$timeout)) config$api$timeout else 360
+  if (!is.null(timeout_seconds)) {
+    timeout_seconds <- if (!is.null(config$api$timeout)) config$api$timeout else 360
+  }
   
   response <- httr::POST(
     "https://api.openai.com/v1/chat/completions",
@@ -140,8 +158,8 @@ call_openai_api <- function(config, model, prompt, temperature, timeout_seconds,
       ),
       temperature = temperature
     ), auto_unbox = TRUE),
-    httr::timeout(timeout_seconds),
-    httr::config(connecttimeout = 360),
+    httr_timeout(timeout_seconds),
+    httr::config(connecttimeout = if (is.null(timeout_seconds)) 0 else 360),
     encode = "raw"
   )
   
@@ -170,7 +188,7 @@ call_openai_compatible_api <- function(config, model, prompt, temperature, timeo
       "Authorization" = paste(config$auth_prefix, api_key)
     ),
     body = jsonlite::toJSON(request_body, auto_unbox = TRUE),
-    httr::timeout(timeout_seconds),
+    httr_timeout(timeout_seconds),
     encode = "raw"
   )
 
@@ -219,8 +237,8 @@ call_external_openai_api <- function(config, model, prompt, temperature, timeout
       "Authorization" = paste(config$auth_prefix, api_key)
     ),
     body = jsonlite::toJSON(request_body, auto_unbox = TRUE, null = "null"),
-    httr::timeout(timeout_seconds),
-    httr::config(connecttimeout = min(timeout_seconds, 360)),
+    httr_timeout(timeout_seconds),
+    httr::config(connecttimeout = if (is.null(timeout_seconds)) 0 else min(timeout_seconds, 360)),
     encode = "raw"
   )
 
@@ -299,7 +317,7 @@ call_claude_api <- function(config, model, prompt, temperature, timeout_seconds,
       temperature = temperature,
       max_tokens = config$max_tokens %||% 4096
     )) |>
-    httr2::req_timeout(timeout_seconds) |>
+    httr2_timeout(timeout_seconds) |>
     httr2::req_perform()
   
   resp <- httr2::resp_body_json(req)
@@ -315,7 +333,7 @@ call_gemini_api <- function(config, model, prompt, temperature, timeout_seconds,
       contents = list(list(parts = list(list(text = prompt)))),
       generationConfig = list(temperature = temperature)
     )) |>
-    httr2::req_timeout(timeout_seconds) |>
+    httr2_timeout(timeout_seconds) |>
     httr2::req_perform()
   
   resp <- httr2::resp_body_json(req)
@@ -333,7 +351,7 @@ call_grok_api <- function(config, model, prompt, temperature, timeout_seconds, a
       messages = list(list(role = "user", content = prompt)),
       temperature = temperature
     )) |>
-    httr2::req_timeout(timeout_seconds) |>
+    httr2_timeout(timeout_seconds) |>
     httr2::req_perform()
   
   resp <- httr2::resp_body_json(req)
@@ -358,7 +376,7 @@ call_doubao_api <- function(config, model, prompt, temperature, timeout_seconds,
       messages = list(list(role = "user", content = prompt)),
       temperature = temperature
     )) |>
-    httr2::req_timeout(timeout_seconds) |>
+    httr2_timeout(timeout_seconds) |>
     httr2::req_perform()
   
   resp <- httr2::resp_body_json(req)

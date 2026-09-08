@@ -145,6 +145,7 @@ annotations <- llm_celltype(
   species = "Human",
   model = model,
   topgenenumber = 50,
+  wait_indefinitely = TRUE,
   allowed_cell_types = allowed_cell_types
 )
 

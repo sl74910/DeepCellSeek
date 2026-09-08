@@ -11,7 +11,8 @@ llm_celltype(
   model = "deepseek-v4-flash",
   topgenenumber = 10,
   api_key = NULL,
-  allowed_cell_types = NULL
+  allowed_cell_types = NULL,
+  wait_indefinitely = FALSE
 )
 }
 \arguments{
@@ -29,6 +30,9 @@ llm_celltype(
 
 \item{allowed_cell_types}{Optional character vector, data frame with a
 \code{cell_type} column, or RDS path containing the only labels the model may use}
+
+\item{wait_indefinitely}{Whether to wait indefinitely for the LLM response
+instead of using the default request timeout (default: FALSE)}
 }
 \value{
 Cell type annotation results

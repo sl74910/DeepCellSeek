@@ -6,21 +6,28 @@
 #' @param model Model to use for annotation
 #' @param topgenenumber Number of top genes to consider
 #' @param api_key API key for the LLM service
+#' @param wait_indefinitely Whether to wait indefinitely for the LLM response
+#'   instead of using the default request timeout (default: FALSE)
 #' @param allowed_cell_types Optional character vector, data frame with a
 #'   `cell_type` column, or RDS path containing the only labels the model may use
 #' @return Cell type annotation results
 #' @export
 llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "deepseek-v4-flash",
                          topgenenumber = 10, api_key = NULL,
-                         allowed_cell_types = NULL) {
+                         allowed_cell_types = NULL, wait_indefinitely = FALSE) {
 
   if (!requireNamespace("glue", quietly = TRUE)) {
     stop("Package 'glue' is required. Please install it with: install.packages('glue')")
   }
 
   if (!is_model_supported(model)) {
-    stop("❌ Model not supported: ", model, "\nSupported models: ", 
+    stop("❌ Model not supported: ", model, "\nSupported models: ",
          paste(unlist(get_supported_models()), collapse = ", "))
+  }
+
+  if (!is.logical(wait_indefinitely) || length(wait_indefinitely) != 1L ||
+      is.na(wait_indefinitely)) {
+    stop("'wait_indefinitely' must be a single TRUE or FALSE value")
   }
 
   config <- get_model_config(model)
@@ -55,6 +62,8 @@ llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "d
     return(message)
   }
 
+  timeout_seconds <- if (wait_indefinitely) NULL else 1000
+
   cutnum <- ceiling(length(processed_input) / 30)
   if (cutnum > 1) {
     cid <- as.numeric(cut(1:length(processed_input), cutnum))
@@ -82,7 +91,8 @@ llm_celltype <- function(input, tissuename = NULL, species = "Human", model = "d
                           ),
                           marker_data = marker_data)
 
-      result <- call_llm_api(model, prompt, temperature = NULL, timeout_seconds = 1000, api_key = api_key)
+      result <- call_llm_api(model, prompt, temperature = NULL,
+                             timeout_seconds = timeout_seconds, api_key = api_key)
 
       if (!is.null(result)) {
         res <- trimws(unlist(strsplit(result, '\n')))
