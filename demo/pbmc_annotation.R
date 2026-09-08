@@ -118,7 +118,7 @@ model <- "gpt-5.6-sol"
 Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "max")
 
 # 如果不使用 OPENAI_API_KEY 环境变量，可改用：
-Sys.setenv(OPENAI_API_KEY = "sk-01307247f2d210d5741659459292a3c68131413d1fcec1a0b6ee279bbe469d9a")
+Sys.setenv(OPENAI_API_KEY = "sk-xxx")
 Sys.setenv(DEEPCELLSEEK_EXTERNAL_BASE_URL = "https://hk1.r7z.net")
 # 若中转站要求 /v1/responses，可设置：
 # Sys.setenv(DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH = "/v1/responses")
@@ -135,12 +135,16 @@ if (!any(nzchar(api_key_values))) {
   stop("请先设置以下任一变量：", paste(api_key_envs, collapse = " 或 "), "，再运行此 demo。")
 }
 
+# 对于基因数量较多或经过多批次整合的数据集，建议每个 cluster 提供前 50 个
+# 差异 marker 基因，以保留足够的注释信息；小型或低质量数据可酌情减少该数值。
+# allowed_cell_types 限制模型只能使用 RDS 中的候选类型；混合群可返回
+# "候选类型 A + 候选类型 B"，其中每个组成部分均须来自候选列表。
 annotations <- llm_celltype(
   input = markers_df,
   tissuename = "PBMC",
   species = "Human",
   model = model,
-  topgenenumber = 10,
+  topgenenumber = 50,
   allowed_cell_types = allowed_cell_types
 )
 
