@@ -106,16 +106,16 @@ if (!file.exists(allowed_cell_types_file)) {
 }
 allowed_cell_types <- readRDS(allowed_cell_types_file)
 
-# 模型选择（三选一；只保留所选模型的 model 赋值）：
+# 模型选择（选择一个；只保留所选模型的 model 赋值）：
 # model <- "kimi-k2.6"                # Kimi
 # Sys.setenv(KIMI_API_KEY = "你的 API Key")
 #
 # model <- "deepseek-v4-flash"          # DeepSeek
 # Sys.setenv(DEEPSEEK_API_KEY = "")
 
-# 默认使用外部 GPT-5.6-sol；建议使用 xhigh 推理强度以获得更充分的分析。
-model <- "gpt-5.6-sol"
-Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "xhigh")
+# 使用外部 GPT-6-astra。
+model <- "gpt-6-astra"
+Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "high")
 
 # 如果不使用 OPENAI_API_KEY 环境变量，可取消下一行注释并填入真实密钥：
 # Sys.setenv(OPENAI_API_KEY = "sk-xxx")
@@ -128,7 +128,8 @@ api_key_envs <- switch(
   model,
   "kimi-k2.6" = "KIMI_API_KEY",
   "deepseek-v4-flash" = "DEEPSEEK_API_KEY",
-  "gpt-5.6-sol" = c("OPENAI_API_KEY", "DEEPCELLSEEK_EXTERNAL_API_KEY")
+  "gpt-5.6-sol" = c("OPENAI_API_KEY", "DEEPCELLSEEK_EXTERNAL_API_KEY"),
+  "gpt-6-astra" = c("OPENAI_API_KEY", "DEEPCELLSEEK_EXTERNAL_API_KEY")
 )
 api_key_values <- Sys.getenv(api_key_envs, unset = "")
 if (!any(nzchar(api_key_values))) {
@@ -175,6 +176,7 @@ model_label <- switch(
   "kimi-k2.6" = "Kimi",
   "deepseek-v4-flash" = "DeepSeek",
   "gpt-5.6-sol" = "External GPT",
+  "gpt-6-astra" = "External GPT",
   model
 )
 seurat_umap <- Seurat::DimPlot(

@@ -22,7 +22,7 @@ MODEL_CONFIGS <- list(
     requires_openai_auth = TRUE,
     wire_api = "responses",
     reasoning_effort = "max",
-    models = c("gpt-5.6-sol"),
+    models = c("gpt-5.6-sol", "gpt-6-astra"),
     default_model = "gpt-5.6-sol"
   ),
 
