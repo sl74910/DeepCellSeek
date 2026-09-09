@@ -13,7 +13,7 @@
 # Sys.setenv(DEEPCELLSEEK_EXTERNAL_BASE_URL = "https://sub2.hongliantina.xyz")
 # 若中转站要求 /v1/responses，可设置：
 # Sys.setenv(DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH = "/v1/responses")
-# 可选：Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "max")
+# 可选：Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "xhigh")
 # 在下方的 model 变量中选择使用外部 GPT、Kimi 或 DeepSeek。
 
 if (!requireNamespace("Seurat", quietly = TRUE)) {
@@ -106,19 +106,19 @@ if (!file.exists(allowed_cell_types_file)) {
 }
 allowed_cell_types <- readRDS(allowed_cell_types_file)
 
-# 模型选择（二选一；取消另一行的注释）：
+# 模型选择（三选一；只保留所选模型的 model 赋值）：
 # model <- "kimi-k2.6"                # Kimi
 # Sys.setenv(KIMI_API_KEY = "你的 API Key")
 #
 # model <- "deepseek-v4-flash"          # DeepSeek
 # Sys.setenv(DEEPSEEK_API_KEY = "")
 
-# 默认追加使用外部 GPT-5.6-sol，并请求最大推理强度。
+# 默认使用外部 GPT-5.6-sol；建议使用 xhigh 推理强度以获得更充分的分析。
 model <- "gpt-5.6-sol"
-Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "max")
+Sys.setenv(DEEPCELLSEEK_REASONING_EFFORT = "xhigh")
 
-# 如果不使用 OPENAI_API_KEY 环境变量，可改用：
-Sys.setenv(OPENAI_API_KEY = "sk-xxx")
+# 如果不使用 OPENAI_API_KEY 环境变量，可取消下一行注释并填入真实密钥：
+# Sys.setenv(OPENAI_API_KEY = "sk-xxx")
 Sys.setenv(DEEPCELLSEEK_EXTERNAL_BASE_URL = "https://hk1.r7z.net")
 # 若中转站要求 /v1/responses，可设置：
 # Sys.setenv(DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH = "/v1/responses")

@@ -135,25 +135,37 @@ The demo downloads the [10x Genomics PBMC 3K dataset](https://cf.10xgenomics.com
 used by the [Seurat PBMC 3K tutorial](https://satijalab.org/seurat/articles/pbmc3k_tutorial.html)
 to `demo/inputs/`. The raw data and generated marker cache are ignored by git.
 It then runs the Seurat workflow through `FindAllMarkers()` before annotating
-the clusters with a DeepSeek or Kimi API key:
+the clusters with the default external `gpt-5.6-sol` model, or with DeepSeek
+or Kimi after changing the model block in the script:
 
 ```r
-Sys.setenv(DEEPSEEK_API_KEY = "your_deepseek_api_key")
+# The default model uses an OpenAI Responses-compatible relay.
+Sys.setenv(
+  OPENAI_API_KEY = "your_api_key",
+  DEEPCELLSEEK_EXTERNAL_BASE_URL = "https://your-relay.example.com",
+  DEEPCELLSEEK_REASONING_EFFORT = "xhigh"
+)
 source("demo/pbmc_annotation.R")
 ```
 
-To use Kimi instead, set its key and select the model before running the demo:
+To use Kimi instead, change the demo's `model` assignment to `"kimi-k2.6"`,
+then set its key before running the demo:
 
 ```r
-Sys.setenv(
-  KIMI_API_KEY = "your_kimi_api_key",
-  DEEPCELLSEEK_DEMO_MODEL = "kimi-k2.6"
-)
+Sys.setenv(KIMI_API_KEY = "your_kimi_api_key")
 source("demo/pbmc_annotation.R")
 ```
 
 Run these commands from the package root. The demo prints the annotation
 returned for every Seurat cluster.
+
+### 注意事项
+
+- `gpt-5.6-sol` 通过 OpenAI Responses API 兼容的中转站调用，不是免费网关模型。运行前请配置 `OPENAI_API_KEY`，或使用 `DEEPCELLSEEK_EXTERNAL_API_KEY`；密钥不要直接提交到脚本或版本库。
+- 对 `gpt-5.6-sol`，建议将 `DEEPCELLSEEK_REASONING_EFFORT` 设为 `xhigh`（demo 已采用此设置）。更高的推理强度通常会增加等待时间和 token 用量；如果中转站不支持该值，请按其文档改用支持的等级。
+- `DEEPCELLSEEK_EXTERNAL_BASE_URL` 和 `DEEPCELLSEEK_EXTERNAL_ENDPOINT_PATH` 必须与中转站的 Responses API 路径匹配。不同中转站的地址、鉴权方式和模型可用性可能不同，请先用小规模输入验证配置。
+- demo 使用 `wait_indefinitely = TRUE` 并开启流式请求，长时间运行属于正常现象。运行期间请保持网络连接，并留意服务商的超时、配额和计费限制。
+- `allowed_cell_types` 只限制模型可返回的标签，不会替代生物学复核。请结合 marker 基因、组织背景和实验设计检查注释结果，尤其是混合 cluster 或低质量 cluster。
 
 ## 📚 Complete Function Reference
 
